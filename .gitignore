@@ -1,0 +1,21 @@
+# AI working artifacts (Organic Driven Development tracking)
+odd/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor / IDE config
+.vscode/
+.idea/
+
+# Packaged extension artifacts
+*.xpi
+*.zip
+web-ext-artifacts/
+
+# Local tooling / secrets / logs
+.codegraph/
+.env
+.env.*
+*.log
