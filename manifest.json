@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "THM Markdown Copier",
+  "version": "0.1.0",
+  "description": "Copy an entire TryHackMe room to the clipboard as clean Markdown.",
+  "permissions": ["clipboardWrite"],
+  "host_permissions": ["https://tryhackme.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://tryhackme.com/room/*"],
+      "js": ["converter.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "thm-markdown-copier@example.com",
+      "strict_min_version": "109.0"
+    }
+  }
+}
