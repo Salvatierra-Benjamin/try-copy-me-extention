@@ -163,9 +163,45 @@
     document.body.appendChild(button);
   }
 
+  function isRoomPage() {
+    return /^\/(r\/)?room\/[^/]+/.test(window.location.pathname);
+  }
+
+  function removeButton() {
+    const button = document.getElementById(BUTTON_ID);
+    if (button) {
+      button.remove();
+    }
+  }
+
+  let lastHref = "";
+
+  function syncUI() {
+    lastHref = window.location.href;
+    if (isRoomPage()) {
+      injectStyles();
+      ensureButton();
+    } else {
+      removeButton();
+    }
+  }
+
+  function watchNavigation() {
+    window.addEventListener("popstate", syncUI);
+    const observer = new MutationObserver(() => {
+      if (
+        window.location.href !== lastHref ||
+        (isRoomPage() && !document.getElementById(BUTTON_ID))
+      ) {
+        syncUI();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function init() {
-    injectStyles();
-    ensureButton();
+    syncUI();
+    watchNavigation();
   }
 
   if (document.readyState === "loading") {

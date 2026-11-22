@@ -18,8 +18,7 @@ fi
 // @namespace    https://github.com/Salvatierra-Benjamin/try-copy-me-extention
 // @version      ${VERSION}
 // @description  Copy an entire TryHackMe room to the clipboard as clean Markdown.
-// @match        https://tryhackme.com/room/*
-// @match        https://tryhackme.com/r/room/*
+// @match        https://tryhackme.com/*
 // @grant        none
 // @inject-into  content
 // @run-at       document-idle

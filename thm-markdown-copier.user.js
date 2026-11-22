@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name         THM Markdown Copier
 // @namespace    https://github.com/Salvatierra-Benjamin/try-copy-me-extention
-// @version      0.1.1
+// @version      0.1.2
 // @description  Copy an entire TryHackMe room to the clipboard as clean Markdown.
-// @match        https://tryhackme.com/room/*
-// @match        https://tryhackme.com/r/room/*
+// @match        https://tryhackme.com/*
 // @grant        none
 // @inject-into  content
 // @run-at       document-idle
@@ -441,9 +440,45 @@
     document.body.appendChild(button);
   }
 
+  function isRoomPage() {
+    return /^\/(r\/)?room\/[^/]+/.test(window.location.pathname);
+  }
+
+  function removeButton() {
+    const button = document.getElementById(BUTTON_ID);
+    if (button) {
+      button.remove();
+    }
+  }
+
+  let lastHref = "";
+
+  function syncUI() {
+    lastHref = window.location.href;
+    if (isRoomPage()) {
+      injectStyles();
+      ensureButton();
+    } else {
+      removeButton();
+    }
+  }
+
+  function watchNavigation() {
+    window.addEventListener("popstate", syncUI);
+    const observer = new MutationObserver(() => {
+      if (
+        window.location.href !== lastHref ||
+        (isRoomPage() && !document.getElementById(BUTTON_ID))
+      ) {
+        syncUI();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function init() {
-    injectStyles();
-    ensureButton();
+    syncUI();
+    watchNavigation();
   }
 
   if (document.readyState === "loading") {
