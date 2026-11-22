@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         THM Markdown Copier
 // @namespace    https://github.com/Salvatierra-Benjamin/try-copy-me-extention
-// @version      0.1.0
+// @version      0.1.1
 // @description  Copy an entire TryHackMe room to the clipboard as clean Markdown.
 // @match        https://tryhackme.com/room/*
+// @match        https://tryhackme.com/r/room/*
 // @grant        none
+// @inject-into  content
 // @run-at       document-idle
 // @downloadURL  https://raw.githubusercontent.com/Salvatierra-Benjamin/try-copy-me-extention/main/thm-markdown-copier.user.js
 // @updateURL    https://raw.githubusercontent.com/Salvatierra-Benjamin/try-copy-me-extention/main/thm-markdown-copier.user.js

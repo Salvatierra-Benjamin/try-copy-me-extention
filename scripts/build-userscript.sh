@@ -19,7 +19,9 @@ fi
 // @version      ${VERSION}
 // @description  Copy an entire TryHackMe room to the clipboard as clean Markdown.
 // @match        https://tryhackme.com/room/*
+// @match        https://tryhackme.com/r/room/*
 // @grant        none
+// @inject-into  content
 // @run-at       document-idle
 // @downloadURL  ${RAW_URL}
 // @updateURL    ${RAW_URL}
