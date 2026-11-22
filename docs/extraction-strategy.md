@@ -63,6 +63,6 @@ article[data-task-no] > h2 (task title) + div (lesson HTML) + h3 + ol (questions
 ```
 
 - `h2` — the task title.
-- `div` — the lesson content, populated via `dangerouslySetInnerHTML`.
+- `div` — the lesson content, populated via `dangerouslySetInnerHTML` (selected with `:scope > div`).
 - `h3` — the "Answer the questions below" heading.
-- `ol > li` — the questions, one list item each.
+- `:scope > ol > li` — the questions, one list item each. Scoping to the direct child `<ol>` is required because lesson `<div>` blocks can also contain ordered lists.

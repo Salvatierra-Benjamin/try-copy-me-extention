@@ -9,6 +9,26 @@
     return text.replace(/\s+/g, " ").trim();
   }
 
+  // Wrap inline text with Markdown markers without wrapping whitespace-only
+  // content or splitting markers across newlines (e.g. `<strong><br/></strong>`).
+  function wrapInline(raw, marker) {
+    if (!raw) {
+      return "";
+    }
+    return raw
+      .split("\n")
+      .map((part) => {
+        const trimmed = collapse(part);
+        if (!trimmed) {
+          return "";
+        }
+        const lead = /^\s/.test(part) ? " " : "";
+        const trail = /\s$/.test(part) ? " " : "";
+        return lead + marker + trimmed + marker + trail;
+      })
+      .join("\n");
+  }
+
   // Convert an inline-level node to Markdown text.
   function inline(node) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -22,17 +42,14 @@
 
     switch (tag) {
       case "strong":
-      case "b": {
-        const inner = childrenInline(node);
-        return inner ? "**" + inner + "**" : "";
-      }
+      case "b":
+        return wrapInline(childrenInline(node), "**");
       case "em":
-      case "i": {
-        const inner = childrenInline(node);
-        return inner ? "*" + inner + "*" : "";
-      }
+      case "i":
+        return wrapInline(childrenInline(node), "*");
       case "code": {
-        return "`" + collapse(node.textContent) + "`";
+        const text = collapse(node.textContent);
+        return text ? "`" + text + "`" : "";
       }
       case "a": {
         const href = node.getAttribute("href");

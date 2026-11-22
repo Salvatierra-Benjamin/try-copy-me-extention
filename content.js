@@ -28,7 +28,7 @@
       const lessonEl = article.querySelector(":scope > div");
       const lessonHtml = lessonEl ? lessonEl.innerHTML : "";
 
-      const questions = Array.from(article.querySelectorAll("ol > li"))
+      const questions = Array.from(article.querySelectorAll(":scope > ol > li"))
         .map((li) => li.textContent.trim())
         .filter(Boolean);
 
