@@ -6,24 +6,29 @@ single click.
 
 ## Features
 
-- One-click floating **Copy Markdown** button on any `https://tryhackme.com/room/*` page.
-- Captures every task in the room, not only the currently expanded one.
-- Converts lesson HTML to Markdown: headings, lists, tables, code blocks, links, and bold/italic (text-only, images omitted).
+- One-click floating **Copy Markdown** button on TryHackMe room pages (`/room/*` and `/r/room/*`), including client-side SPA navigation.
+- Works on both **free** and **subscriber-only** rooms, capturing every task — not only the currently expanded one.
+- Converts lesson HTML to clean text-only Markdown: headings, lists, tables, dedented code blocks, links, and bold/italic (images omitted).
 - Includes each task's questions in a `### Questions` section.
 - Zero runtime dependencies; plain browser JavaScript.
 
 ## How it works
 
-TryHackMe room pages render an interactive accordion that loads each task on
-demand. The complete room content is nonetheless present in the server-rendered
-`<section id="room-page-critical-content">`, which React keeps in the DOM but
-hides with `display: none` and `visibility: hidden`.
+TryHackMe room pages render an interactive accordion (`RoomPageLazy`) that loads
+each task on demand:
 
-The script reads that hidden section directly, extracts the room title,
-description, and every `article[data-task-no]` (task title, lesson HTML, and
-questions), and converts the lesson HTML to Markdown. No accordion expansion or
-API reverse-engineering is required; hidden elements remain fully readable via
-`innerHTML`.
+1. **Free rooms (DOM primary path):** the complete room content is present in the
+   server-rendered `<section id="room-page-critical-content">`, which React keeps
+   hidden in the DOM (`display: none; visibility: hidden`). The script reads each
+   `article[data-task-no]` directly via `innerHTML` with zero network requests.
+2. **Subscriber-only rooms (authenticated API fallback):** Next.js SSR omits task
+   lessons and questions from `#room-page-critical-content`, leaving only `<h2>`
+   titles. When the script detects empty tasks, it falls back to a same-origin
+   authenticated `GET /api/v2/rooms/tasks?roomCode=<roomCode>` request (using
+   `content.fetch` in Firefox content scripts so page cookies and origin match).
+
+No accordion automation is required. See [docs/extraction-strategy.md](docs/extraction-strategy.md)
+for the full technical breakdown.
 
 ## Requirements
 
