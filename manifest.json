@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "THM Markdown Copier",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Copy an entire TryHackMe room to the clipboard as clean Markdown.",
   "permissions": ["clipboardWrite"],
   "host_permissions": ["https://tryhackme.com/*"],

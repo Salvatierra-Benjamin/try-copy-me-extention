@@ -46,13 +46,25 @@ impossible — list boundaries, inline code, and link destinations would be lost
 Reading `innerHTML` preserves the markup so the converter can reproduce it as
 Markdown.
 
-## Fallback if critical content is ever truncated
+## Fallback for subscriber-only rooms (empty SSR tasks)
 
-If, on very long rooms, the hidden critical-content section were ever truncated
-or emptied, a fallback remains available: locate each accordion control with
-`button[data-task-no]`, click it to force the task to render, and read the
-rendered content from the visible accordion. This is deliberately a fallback
-only, since the primary path requires no interaction.
+On free rooms (`"isAccessibleForFree": true`), `#room-page-critical-content`
+contains every task's lesson and questions. On subscriber-only rooms
+(`"isAccessibleForFree": false`), Next.js SSR intentionally omits the lesson
+`<div>` and questions `<ol>` from `#room-page-critical-content`, leaving only
+the `<h2>` task titles.
+
+When DOM extraction finds no task lessons or questions, `content.js` falls back
+to a same-origin authenticated request to:
+
+```
+GET /api/v2/rooms/tasks?roomCode=<roomCode>
+```
+
+Each returned task provides `taskNo`, `title`, `description` (HTML lesson body),
+and `questions[].question` (plain text or HTML, converted through `ThmConverter`).
+If the room title is not present in the DOM, it also fetches
+`/api/v2/rooms/details?roomCode=<roomCode>`.
 
 ## Structural reference
 

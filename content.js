@@ -9,7 +9,7 @@
   const STYLE_ID = "thm-markdown-copy-styles";
 
   // Read the server-rendered critical-content section and build the room object.
-  function extractRoom() {
+  function extractRoomFromDom() {
     const section = document.getElementById("room-page-critical-content");
     if (!section) {
       return null;
@@ -36,6 +36,112 @@
     });
 
     return { title: title, description: description, tasks: tasks };
+  }
+
+  function hasTaskContent(room) {
+    return Boolean(
+      room &&
+        room.tasks &&
+        room.tasks.length > 0 &&
+        room.tasks.some(
+          (task) =>
+            (task.lessonHtml && task.lessonHtml.trim()) ||
+            (task.questions && task.questions.length > 0)
+        )
+    );
+  }
+
+  function getRoomCode() {
+    const match = window.location.pathname.match(/^\/(?:r\/)?room\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function formatQuestion(raw) {
+    if (!raw || typeof raw !== "string") {
+      return "";
+    }
+    const md = window.ThmConverter.htmlToMarkdown(raw);
+    return md.replace(/\s+/g, " ").trim();
+  }
+
+  // Fallback for subscriber-only rooms where SSR omits task lessons/questions.
+  async function fetchRoomFromApi(roomCode, domRoom) {
+    const tasksUrl = "/api/v2/rooms/tasks?roomCode=" + encodeURIComponent(roomCode);
+    const res = await fetch(tasksUrl, { credentials: "same-origin" });
+    if (!res.ok) {
+      return null;
+    }
+    const json = await res.json();
+    const rawTasks = Array.isArray(json && json.data) ? json.data : [];
+    if (!rawTasks.length) {
+      return null;
+    }
+
+    let title = (domRoom && domRoom.title) || "";
+    let description = (domRoom && domRoom.description) || "";
+
+    if (!title) {
+      try {
+        const detailsUrl = "/api/v2/rooms/details?roomCode=" + encodeURIComponent(roomCode);
+        const detailsRes = await fetch(detailsUrl, { credentials: "same-origin" });
+        if (detailsRes.ok) {
+          const detailsJson = await detailsRes.json();
+          const data = detailsJson && detailsJson.data;
+          if (data) {
+            title = data.title || title;
+            description = data.description || description;
+          }
+        }
+      } catch (e) {
+        // Ignore details failure; tasks alone are still usable.
+      }
+    }
+
+    const sortedTasks = rawTasks.slice().sort((a, b) => (a.taskNo || 0) - (b.taskNo || 0));
+    const tasks = sortedTasks.map((task) => {
+      const sortedQuestions = (Array.isArray(task.questions) ? task.questions : [])
+        .slice()
+        .sort((a, b) => (a.questionNo || 0) - (b.questionNo || 0));
+
+      const questions = sortedQuestions
+        .map((q) => formatQuestion(q && q.question))
+        .filter(Boolean);
+
+      return {
+        title: task.title || "",
+        lessonHtml: task.description || "",
+        questions: questions
+      };
+    });
+
+    return {
+      title: title || roomCode,
+      description: description,
+      tasks: tasks
+    };
+  }
+
+  async function extractRoom() {
+    const domRoom = extractRoomFromDom();
+    if (hasTaskContent(domRoom)) {
+      return domRoom;
+    }
+
+    const roomCode = getRoomCode();
+    if (!roomCode) {
+      return domRoom;
+    }
+
+    try {
+      const apiRoom = await fetchRoomFromApi(roomCode, domRoom);
+      if (hasTaskContent(apiRoom)) {
+        return apiRoom;
+      }
+    } catch (e) {
+      // Fall back to whatever DOM content was available.
+    }
+
+    return domRoom;
   }
 
   // Clipboard fallback via a hidden textarea + execCommand.
@@ -148,16 +254,25 @@
     button.type = "button";
     button.textContent = "Copy Markdown";
 
-    button.addEventListener("click", () => {
-      const room = extractRoom();
-      if (!room) {
-        showToast("No room content found");
+    button.addEventListener("click", async () => {
+      if (button.disabled) {
         return;
       }
-      const markdown = window.ThmConverter.buildRoomMarkdown(room);
-      copyText(markdown).then((ok) => {
+      button.disabled = true;
+      button.textContent = "Copying…";
+      try {
+        const room = await extractRoom();
+        if (!room) {
+          showToast("No room content found");
+          return;
+        }
+        const markdown = window.ThmConverter.buildRoomMarkdown(room);
+        const ok = await copyText(markdown);
         showToast(ok ? "Copied ✓" : "Copy failed");
-      });
+      } finally {
+        button.disabled = false;
+        button.textContent = "Copy Markdown";
+      }
     });
 
     document.body.appendChild(button);
