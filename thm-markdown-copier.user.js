@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         THM Markdown Copier
 // @namespace    https://github.com/Salvatierra-Benjamin/try-copy-me-extention
-// @version      0.1.4
+// @version      0.1.5
 // @description  Copy an entire TryHackMe room to the clipboard as clean Markdown.
 // @match        https://tryhackme.com/*
 // @grant        none
@@ -18,6 +18,31 @@
 // Plain browser JavaScript: no ES module import/export.
 (function () {
   "use strict";
+
+  const SKIP_TAGS = new Set([
+    "img",
+    "svg",
+    "script",
+    "style",
+    "noscript",
+    "iframe",
+    "video",
+    "audio",
+    "canvas"
+  ]);
+
+  const BLOCK_TAGS = new Set([
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "pre", "ul", "ol", "blockquote", "table", "hr",
+    "div", "section", "article", "main", "header", "footer",
+    "aside", "nav", "figure", "figcaption", "dl", "dt", "dd",
+    "details", "summary"
+  ]);
+
+  const CONTAINER_TAGS = new Set([
+    "div", "section", "article", "main", "header", "footer",
+    "aside", "figure", "figcaption", "details", "span"
+  ]);
 
   // Collapse runs of whitespace into a single space and trim.
   function collapse(text) {
@@ -54,6 +79,9 @@
     }
 
     const tag = node.tagName.toLowerCase();
+    if (SKIP_TAGS.has(tag)) {
+      return "";
+    }
 
     switch (tag) {
       case "strong":
@@ -62,30 +90,41 @@
       case "em":
       case "i":
         return wrapInline(childrenInline(node), "*");
-      case "code": {
-        const text = collapse(node.textContent);
-        return text ? "`" + text + "`" : "";
+      case "code":
+      case "kbd": {
+        const raw = node.textContent || "";
+        const trimmed = collapse(raw);
+        if (!trimmed) {
+          return "";
+        }
+        const lead = /^\s/.test(raw) ? " " : "";
+        const trail = /\s$/.test(raw) ? " " : "";
+        return lead + "`" + trimmed + "`" + trail;
       }
       case "a": {
         const href = node.getAttribute("href");
-        const inner = childrenInline(node);
-        if (!href) {
-          return inner;
+        const raw = childrenInline(node);
+        const inner = collapse(raw);
+        if (!inner) {
+          return "";
         }
-        return "[" + inner + "](" + href + ")";
-      }
-      case "img": {
-        const alt = node.getAttribute("alt") || "";
-        const src = node.getAttribute("src") || "";
-        return "![" + alt + "](" + src + ")";
+        const lead = /^\s/.test(raw) ? " " : "";
+        const trail = /\s$/.test(raw) ? " " : "";
+        if (!href) {
+          return lead + inner + trail;
+        }
+        return lead + "[" + inner + "](" + href + ")" + trail;
       }
       case "br": {
         // Line break; stray spacing breaks are collapsed later in the pipeline.
         return "\n";
       }
-      case "span": {
-        // Strip empty span wrappers but keep their inner text.
-        return childrenInline(node);
+      case "p":
+      case "div":
+      case "li": {
+        // Preserve boundaries when block tags appear inside inline contexts
+        // (such as multi-paragraph <li>, <td>, or <blockquote>).
+        return "\n" + childrenInline(node) + "\n";
       }
       default:
         return childrenInline(node);
@@ -110,6 +149,90 @@
       .filter(Boolean);
   }
 
+  // Clean and dedent a `<pre>` block into a fenced Markdown code block.
+  function formatCodeBlock(el) {
+    const raw = (el.textContent || "").replace(/\r\n?/g, "\n");
+    const rawLines = raw.split("\n").map((line) => line.replace(/[ \t]+$/, ""));
+
+    let start = 0;
+    while (start < rawLines.length && rawLines[start].trim() === "") {
+      start += 1;
+    }
+    let end = rawLines.length - 1;
+    while (end >= start && rawLines[end].trim() === "") {
+      end -= 1;
+    }
+    if (start > end) {
+      return "";
+    }
+
+    const trimmedLines = rawLines.slice(start, end + 1);
+
+    let minIndent = Infinity;
+    for (const line of trimmedLines) {
+      if (line.trim() === "") {
+        continue;
+      }
+      const match = line.match(/^[ \t]*/);
+      const indent = match ? match[0].length : 0;
+      if (indent < minIndent) {
+        minIndent = indent;
+      }
+    }
+    if (!Number.isFinite(minIndent)) {
+      minIndent = 0;
+    }
+
+    const dedented = trimmedLines.map((line) =>
+      line.trim() === "" ? "" : line.slice(minIndent)
+    );
+
+    // TryHackMe <pre> tags often indent only the first line while subsequent
+    // lines start at column 0. Strip stray leading spaces on line 0 in that case.
+    if (minIndent === 0 && dedented.length > 0) {
+      dedented[0] = dedented[0].replace(/^[ \t]+/, "");
+    }
+
+    return "```\n" + dedented.join("\n") + "\n```";
+  }
+
+  // Convert an HTML `<table>` into a GitHub-flavored Markdown table.
+  function convertTable(table) {
+    const rows = [];
+    for (const tr of table.querySelectorAll("tr")) {
+      if (tr.closest("table") !== table) {
+        continue;
+      }
+      const cells = Array.from(tr.children)
+        .filter((cell) => {
+          const cellTag = cell.tagName.toLowerCase();
+          return cellTag === "th" || cellTag === "td";
+        })
+        .map((cell) => collapse(childrenInline(cell)).replace(/\|/g, "\\|"));
+      if (cells.length && cells.some(Boolean)) {
+        rows.push(cells);
+      }
+    }
+
+    if (!rows.length) {
+      return "";
+    }
+
+    const colCount = Math.max(...rows.map((row) => row.length));
+    const formatRow = (row) => {
+      const copy = row.slice();
+      while (copy.length < colCount) {
+        copy.push("");
+      }
+      return "| " + copy.join(" | ") + " |";
+    };
+
+    const header = formatRow(rows[0]);
+    const separator = "| " + Array(colCount).fill("---").join(" | ") + " |";
+    const body = rows.slice(1).map(formatRow);
+    return [header, separator, ...body].join("\n");
+  }
+
   // Convert a `<ul>` / `<ol>` (and any nested lists) to Markdown lines.
   function convertList(list, depth, lines) {
     const ordered = list.tagName.toLowerCase() === "ol";
@@ -121,9 +244,6 @@
         continue;
       }
       const li = child;
-      const prefix = ordered ? index + ". " : "- ";
-      index += 1;
-
       let text = "";
       const nestedLists = [];
 
@@ -138,7 +258,12 @@
         text += inline(sub);
       }
 
-      lines.push(indent + prefix + collapse(text));
+      const itemText = collapse(text);
+      if (itemText) {
+        const prefix = ordered ? index + ". " : "- ";
+        index += 1;
+        lines.push(indent + prefix + itemText);
+      }
 
       for (const nested of nestedLists) {
         convertList(nested, depth + 1, lines);
@@ -146,78 +271,126 @@
     }
   }
 
-  // Convert one block-level element into Markdown lines.
-  function convertBlock(el, lines) {
+  function isBlockElement(el) {
     const tag = el.tagName.toLowerCase();
+    if (BLOCK_TAGS.has(tag)) {
+      return true;
+    }
+    if (tag === "span") {
+      return Boolean(
+        el.querySelector("h1,h2,h3,h4,h5,h6,p,pre,ul,ol,blockquote,table,div,section,article")
+      );
+    }
+    return false;
+  }
+
+  function flushInline(buffer, blocks) {
+    const lines = splitLines(buffer);
+    if (lines.length) {
+      blocks.push(lines.join("\n"));
+    }
+  }
+
+  // Convert one block-level element into Markdown blocks.
+  function convertBlock(el, blocks) {
+    const tag = el.tagName.toLowerCase();
+    if (SKIP_TAGS.has(tag)) {
+      return;
+    }
 
     if (/^h[1-6]$/.test(tag)) {
       const level = Number(tag.charAt(1));
       const text = collapse(childrenInline(el));
       if (text) {
-        lines.push("#".repeat(level) + " " + text);
+        blocks.push("#".repeat(level) + " " + text);
       }
       return;
     }
 
     if (tag === "p") {
-      for (const part of splitLines(childrenInline(el))) {
-        lines.push(part);
+      const lines = splitLines(childrenInline(el));
+      if (lines.length) {
+        blocks.push(lines.join("\n"));
       }
       return;
     }
 
     if (tag === "pre") {
-      const code = el.textContent.replace(/\n+$/, "");
-      lines.push("```", code, "```");
+      const codeBlock = formatCodeBlock(el);
+      if (codeBlock) {
+        blocks.push(codeBlock);
+      }
       return;
     }
 
     if (tag === "ul" || tag === "ol") {
-      convertList(el, 0, lines);
+      const listLines = [];
+      convertList(el, 0, listLines);
+      if (listLines.length) {
+        blocks.push(listLines.join("\n"));
+      }
+      return;
+    }
+
+    if (tag === "table") {
+      const tableMd = convertTable(el);
+      if (tableMd) {
+        blocks.push(tableMd);
+      }
       return;
     }
 
     if (tag === "blockquote") {
-      for (const part of splitLines(childrenInline(el))) {
-        lines.push("> " + part);
+      const quoteLines = splitLines(childrenInline(el)).map((part) => "> " + part);
+      if (quoteLines.length) {
+        blocks.push(quoteLines.join("\n"));
       }
       return;
     }
 
-    if (
-      tag === "div" ||
-      tag === "section" ||
-      tag === "article" ||
-      tag === "main" ||
-      tag === "header" ||
-      tag === "footer" ||
-      tag === "span"
-    ) {
-      convertChildren(el, lines);
+    if (tag === "hr") {
+      blocks.push("---");
+      return;
+    }
+
+    if (CONTAINER_TAGS.has(tag)) {
+      convertChildren(el, blocks);
       return;
     }
 
     // Unknown block element: flatten to inline text.
-    const text = collapse(childrenInline(el));
-    if (text) {
-      lines.push(text);
+    const lines = splitLines(childrenInline(el));
+    if (lines.length) {
+      blocks.push(lines.join("\n"));
     }
   }
 
-  // Walk a node's children, converting each block.
-  function convertChildren(parent, lines) {
+  // Walk a node's children, grouping consecutive inline runs and converting blocks.
+  function convertChildren(parent, blocks) {
+    let inlineBuffer = "";
+
     for (const child of parent.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
-        const text = collapse(child.textContent);
-        if (text) {
-          lines.push(text);
-        }
+        inlineBuffer += child.textContent;
         continue;
       }
-      if (child.nodeType === Node.ELEMENT_NODE) {
-        convertBlock(child, lines);
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        continue;
+      }
+      const tag = child.tagName.toLowerCase();
+      if (SKIP_TAGS.has(tag)) {
+        continue;
+      }
+      if (isBlockElement(child)) {
+        flushInline(inlineBuffer, blocks);
+        inlineBuffer = "";
+        convertBlock(child, blocks);
+      } else {
+        inlineBuffer += inline(child);
       }
     }
+
+    flushInline(inlineBuffer, blocks);
   }
 
   // Convert an HTML string to Markdown.
@@ -226,9 +399,9 @@
       return "";
     }
     const doc = new DOMParser().parseFromString(html, "text/html");
-    const lines = [];
-    convertChildren(doc.body, lines);
-    return lines.join("\n");
+    const blocks = [];
+    convertChildren(doc.body, blocks);
+    return blocks.join("\n\n");
   }
 
   // The rendered `<h2>` often already contains "Task N: ...". Strip it so the

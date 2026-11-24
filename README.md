@@ -8,7 +8,7 @@ single click.
 
 - One-click floating **Copy Markdown** button on any `https://tryhackme.com/room/*` page.
 - Captures every task in the room, not only the currently expanded one.
-- Converts lesson HTML to Markdown: headings, lists, code blocks, links, bold/italic, and images.
+- Converts lesson HTML to Markdown: headings, lists, tables, code blocks, links, and bold/italic (text-only, images omitted).
 - Includes each task's questions in a `### Questions` section.
 - Zero runtime dependencies; plain browser JavaScript.
 
