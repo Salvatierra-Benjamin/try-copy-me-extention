@@ -64,12 +64,22 @@
     return md.replace(/\s+/g, " ").trim();
   }
 
+  // Use page-context fetch in Firefox content scripts so cookies/origin match the page.
+  function pageFetch(path) {
+    const url = window.location.origin + path;
+    const fetchFn =
+      typeof content !== "undefined" && content && typeof content.fetch === "function"
+        ? content.fetch.bind(content)
+        : window.fetch.bind(window);
+    return fetchFn(url, { credentials: "same-origin" });
+  }
+
   // Fallback for subscriber-only rooms where SSR omits task lessons/questions.
   async function fetchRoomFromApi(roomCode, domRoom) {
-    const tasksUrl = "/api/v2/rooms/tasks?roomCode=" + encodeURIComponent(roomCode);
-    const res = await fetch(tasksUrl, { credentials: "same-origin" });
+    const tasksPath = "/api/v2/rooms/tasks?roomCode=" + encodeURIComponent(roomCode);
+    const res = await pageFetch(tasksPath);
     if (!res.ok) {
-      return null;
+      throw new Error("Tasks API HTTP " + res.status);
     }
     const json = await res.json();
     const rawTasks = Array.isArray(json && json.data) ? json.data : [];
@@ -82,8 +92,8 @@
 
     if (!title) {
       try {
-        const detailsUrl = "/api/v2/rooms/details?roomCode=" + encodeURIComponent(roomCode);
-        const detailsRes = await fetch(detailsUrl, { credentials: "same-origin" });
+        const detailsPath = "/api/v2/rooms/details?roomCode=" + encodeURIComponent(roomCode);
+        const detailsRes = await pageFetch(detailsPath);
         if (detailsRes.ok) {
           const detailsJson = await detailsRes.json();
           const data = detailsJson && detailsJson.data;
@@ -93,7 +103,7 @@
           }
         }
       } catch (e) {
-        // Ignore details failure; tasks alone are still usable.
+        console.warn("[THM Markdown Copier] Details API failed:", e);
       }
     }
 
@@ -138,7 +148,7 @@
         return apiRoom;
       }
     } catch (e) {
-      // Fall back to whatever DOM content was available.
+      console.error("[THM Markdown Copier] API fallback failed:", e);
     }
 
     return domRoom;
